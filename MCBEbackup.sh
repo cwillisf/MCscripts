@@ -29,12 +29,16 @@ server_read() {
 	buffer=$(journalctl -u "$service" -S "$timestamp" -o cat)
 }
 
-args=$(getopt -l backup-dir:,docker,help -o b:dh -- "$@")
+args=$(getopt -l backup-dir:,backup-zip:,docker,help -o b:dhz: -- "$@")
 eval set -- "$args"
 while [ "$1"  != -- ]; do
 	case $1 in
 	--backup-dir|-b)
 		backup_dir=$2
+		shift 2
+		;;
+	--backup-zip|-z)
+		backup_zip=$(realpath "$2")
 		shift 2
 		;;
 	--docker|-d)
@@ -59,8 +63,9 @@ while [ "$1"  != -- ]; do
 		echo Mandatory arguments to long options are mandatory for short options too.
 		echo '-b, --backup-dir=BACKUP_DIR  directory backups go in. defaults to ~. best on another drive'
 		echo '-d, --docker                 docker run -d -it --name SERVICE -e EULA=TRUE -p 19132:19132/udp -v SERVER_DIR:/data itzg/minecraft-bedrock-server'
+		echo '-z, --backup-zip=BACKUP_ZIP  full path to backup ZIP file. Overrides backup-dir.'
 		echo
-		echo 'Backups are {SERVER_DIR}_Backups/{WORLD}_Backups/YEAR/MONTH/{DATE}_HOUR-MINUTE.zip in BACKUP_DIR.'
+		echo 'Backups default to {SERVER_DIR}_Backups/{WORLD}_Backups/YEAR/MONTH/{DATE}_HOUR-MINUTE.zip in BACKUP_DIR.'
 		exit
 		;;
 	esac
@@ -100,15 +105,17 @@ else
 	fi
 fi
 
-if [ -n "$backup_dir" ]; then
-	backup_dir=$(realpath "$backup_dir")
-else
-	backup_dir=~
+if [ -z "$backup_zip" ]; then
+	if [ -n "$backup_dir" ]; then
+		backup_dir=$(realpath "$backup_dir")
+	else
+		backup_dir=~
+	fi
+	backup_dir=$backup_dir/bedrock/$(basename "$server_dir")_Backups/${world}_Backups/$year/$month
+	# Make directory and parents quietly
+	mkdir -p "$backup_dir"
+	backup_zip=$backup_dir/${date}_$thyme.zip
 fi
-backup_dir=$backup_dir/bedrock/$(basename "$server_dir")_Backups/${world}_Backups/$year/$month
-# Make directory and parents quietly
-mkdir -p "$backup_dir"
-backup_zip=$backup_dir/${date}_$thyme.zip
 
 server_read
 # If save was held
